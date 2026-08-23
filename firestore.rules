@@ -1,0 +1,23 @@
+// Anonymous increment spammable in pure SPA, enable App Check reCAPTCHA Enterprise for production hardening
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isReserved(slug) { return slug in ['login','dashboard','admin','api','settings','404','onboarding','auth','logout']; }
+    function isValidView() { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views']) && request.resource.data.views == resource.data.views + 1; }
+    function isValidClick() { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks']) && request.resource.data.clicks == resource.data.clicks + 1; }
+
+    match /microsites/{slug} {
+      allow get: if true; // public boleh buka
+      allow list: if request.auth != null && request.auth.uid == resource.data.userId; // CEGAH SCRAPE ALL
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid && !isReserved(slug) && slug.matches('^[a-z0-9-]{3,30}$');
+      allow update: if (request.auth != null && resource.data.userId == request.auth.uid) || isValidView();
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+
+    match /microsites/{slug}/blocks/{id} {
+      allow get, list: if true;
+      allow create, delete: if request.auth != null && get(/databases/$(database)/documents/microsites/$(slug)).data.userId == request.auth.uid;
+      allow update: if (request.auth != null && get(/databases/$(database)/documents/microsites/$(slug)).data.userId == request.auth.uid) || isValidClick();
+    }
+  }
+}
