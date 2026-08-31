@@ -45,7 +45,7 @@ function getTornClipPath(amount: number): string {
 function LogoEditor({ config, onChange }: { config: MicrositeConfig; onChange: (c: MicrositeConfig) => void }) {
   return (
     <div className="p-3 rounded-2xl bg-white border shadow-sm space-y-3">
-      <p className="font-semibold text-sm">🖼️ Logo & Judul + Animasi</p>
+      <p className="font-semibold text-sm">Logo & Judul + Animasi</p>
       <input value={config.logoUrl} onChange={(e) => onChange({ ...config, logoUrl: e.target.value })} placeholder="https://.../logo.png atau .mp4/.webm" className="w-full p-2.5 rounded-xl border bg-white text-xs font-mono" />
       <div className="flex gap-1 flex-wrap">
         {(["circle", "square", "rounded", "hexagon", "blob", "jelly"] as const).map((s) => (
@@ -54,7 +54,7 @@ function LogoEditor({ config, onChange }: { config: MicrositeConfig; onChange: (
       </div>
 
       <div className="space-y-2 pt-2 border-t">
-        <p className="text-[11px] font-bold opacity-70">✨ Animasi Logo</p>
+        <p className="text-[11px] font-bold opacity-70">Animasi Logo</p>
         <div className="flex gap-1 flex-wrap">
           {(["none", "float", "pulse", "spin", "bounce", "jelly", "wiggle", "glow"] as const).map((anim) => (
             <button key={anim} onClick={() => onChange({ ...config, logoAnimation: anim })} className={`px-2.5 py-1 rounded-full border text-[11px] ${config.logoAnimation === anim ? "bg-black text-white" : "bg-white"}`}>{anim}</button>
@@ -286,11 +286,11 @@ export default function Admin() {
         </div>
 
         <LogoEditor config={config} onChange={(c) => setConfig(c)} />
-        <BgGlassEditor label="🌈 Latar Luar (Outer)" bg={config.outerBg} onChange={(b) => setConfig({ ...config, outerBg: b })} />
-        <BgGlassEditor label="📱 Dalam Bingkai HP (Inner)" bg={config.innerBg} onChange={(b) => setConfig({ ...config, innerBg: b })} />
+        <BgGlassEditor label="Latar Luar (Outer)" bg={config.outerBg} onChange={(b) => setConfig({ ...config, outerBg: b })} />
+        <BgGlassEditor label="Latar Dalam Bingkai HP(Inner)" bg={config.innerBg} onChange={(b) => setConfig({ ...config, innerBg: b })} />
 
         <div className="p-3 rounded-2xl bg-white border shadow-sm space-y-2">
-          <p className="font-semibold text-sm">📐 Bingkai HP</p>
+          <p className="font-semibold text-sm">Bingkai HP</p>
           <div className="grid grid-cols-2 gap-2 text-[11px]">
             <label className="space-y-1">thickness {config.phoneFrame.thickness}px<input type="range" min={0} max={30} value={config.phoneFrame.thickness} onChange={(e) => setConfig({ ...config, phoneFrame: { ...config.phoneFrame, thickness: Number(e.target.value) } })} className="w-full" /></label>
             <label className="space-y-1">radius {config.phoneFrame.radius}px<input type="range" min={0} max={80} value={config.phoneFrame.radius} onChange={(e) => setConfig({ ...config, phoneFrame: { ...config.phoneFrame, radius: Number(e.target.value) } })} className="w-full" /></label>
@@ -302,7 +302,7 @@ export default function Admin() {
         <ButtonDefaultsEditor defaults={config.buttonDefaults} onChange={(d) => setConfig({ ...config, buttonDefaults: d })} />
 
         <div className="p-3 rounded-2xl bg-white border shadow-sm space-y-2">
-          <p className="font-semibold text-sm">🔗 Links & Pembatas</p>
+          <p className="font-semibold text-sm">Tombol & Pembatas</p>
           <div className="flex gap-2">
             <button onClick={() => setConfig({ ...config, links: [...config.links, { id: `link-${Date.now()}`, title: "Link baru", url: "https://", bgColor: "rgba(255,255,255,0.85)", textColor: "#111827", width: 100, fontSize: 15, height: "lg", radius: 20, custom: false, shapeType: "pill", tornAmount: 22, bold: true, alpha: 85, blur: 0, backdrop: 12, saturate: 150, brightness: 105, refraction: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.8)", borderGradientFrom: "#ffffff", borderGradientTo: "#ffffff", borderRotation: 135 } as LinkItem] })} className="px-3 py-1.5 rounded-full bg-black text-white text-[11px]">+ Link</button>
             <button onClick={() => setConfig({ ...config, links: [...config.links, { id: `div-${Date.now()}`, type: "divider", divider: { enabled: true, text: "•", lineColor: "#ffffff", pillColor: "#ffffff", textColor: "#6b7280", height: 1.8, showDot: true } } as DividerBlock] })} className="px-3 py-1.5 rounded-full bg-white border text-[11px]">+ Pembatas</button>
@@ -319,7 +319,7 @@ export default function Admin() {
           </DndContext>
         </div>
 
-        <button onClick={handlePublish} disabled={saving} className="w-full py-3 rounded-full bg-black text-white font-bold text-sm sticky bottom-4 shadow-xl">{saving ? "Publishing..." : `🚀 Publish /${slug}`}</button>
+        <button onClick={handlePublish} disabled={saving} className="w-full py-3 rounded-full bg-black text-white font-bold text-sm sticky bottom-4 shadow-xl">{saving ? "Publishing..." : `Publish /${slug}`}</button>
       </div>
 
       <div className="flex-1 min-h-[100vh] flex items-center justify-center p-6 relative overflow-hidden bg-transparent">
