@@ -62,7 +62,7 @@ function MiniIconBtn({ children, label, onClick }: { children: React.ReactNode; 
 function LogoEditor({ config, onChange }: { config: MicrositeConfig; onChange: (c: MicrositeConfig) => void }) {
   return (
     <div className="p-3 rounded-2xl bg-white border shadow-sm space-y-3">
-      <p className="font-semibold text-sm">🖼️ Logo & Judul + Animasi</p>
+      <p className="font-semibold text-sm">Logo</p>
       <input value={config.logoUrl} onChange={(e) => onChange({ ...config, logoUrl: e.target.value })} placeholder="https://.../logo.png atau .mp4/.webm" className="w-full p-2.5 rounded-xl border bg-white text-xs font-mono" />
       <div className="flex gap-1 flex-wrap">
         {(["circle", "square", "rounded", "hexagon", "blob", "jelly"] as const).map((s) => (
@@ -112,7 +112,7 @@ function BgGlassEditor({ label, bg, onChange }: { label: string; bg: BgConfig; o
   const handleGradChange = (from: string, to: string) => { setGradFrom(from); setGradTo(to); onChange({ ...bg, type: "gradient", gradientFrom: from, gradientTo: to, value: `linear-gradient(135deg, ${from}, ${to})` }); };
   return (
     <div className="space-y-3 p-3 rounded-2xl bg-white border shadow-sm">
-      <p className="font-semibold text-sm">{label} — 6 slider glass</p>
+      <p className="font-semibold text-sm">{label}</p>
       <div className="flex gap-1 flex-wrap">
         {(["color", "gradient", "image", "video", "transparent"] as const).map((t) => (
           <button key={t} onClick={() => onChange({ ...bg, type: t })} className={`px-3 py-1 rounded-full border text-xs ${bg.type === t ? "bg-black text-white" : "bg-white"}`}>{t}</button>
@@ -163,7 +163,7 @@ function BgGlassEditor({ label, bg, onChange }: { label: string; bg: BgConfig; o
 function ButtonDefaultsEditor({ defaults, onChange }: { defaults: ButtonDefaults; onChange: (d: ButtonDefaults) => void }) {
   return (
     <div className="p-3 rounded-2xl bg-white border shadow-sm space-y-3">
-      <p className="font-semibold text-sm">🔘 Button Default</p>
+      <p className="font-semibold text-sm">Tombol Default</p>
       <div className="grid grid-cols-2 gap-2 text-[11px]">
         <label className="space-y-1">bgColor<input type="color" value={defaults.bgColor.startsWith("#") ? defaults.bgColor : "#ffffff"} onChange={(e) => onChange({ ...defaults, bgColor: e.target.value })} className="w-full h-7 rounded" /></label>
         <label className="space-y-1">textColor<input type="color" value={defaults.textColor} onChange={(e) => onChange({ ...defaults, textColor: e.target.value })} className="w-full h-7 rounded" /></label>
@@ -486,11 +486,11 @@ export default function Admin() {
         </div>
 
         <LogoEditor config={config} onChange={(c)=>setConfig(c)} />
-        <BgGlassEditor label="🌈 Latar Luar (Outer)" bg={config.outerBg} onChange={(b)=>setConfig({ ...config, outerBg: b })} />
-        <BgGlassEditor label="📱 Dalam Bingkai HP (Inner)" bg={config.innerBg} onChange={(b)=>setConfig({ ...config, innerBg: b })} />
+        <BgGlassEditor label="Latar Luar (Outer)" bg={config.outerBg} onChange={(b)=>setConfig({ ...config, outerBg: b })} />
+        <BgGlassEditor label="Latar Dalam HP (Inner)" bg={config.innerBg} onChange={(b)=>setConfig({ ...config, innerBg: b })} />
 
         <div className="p-3 rounded-2xl bg-white border shadow-sm space-y-2">
-          <p className="font-semibold text-sm">📐 Bingkai HP</p>
+          <p className="font-semibold text-sm">Border HP</p>
           <div className="grid grid-cols-2 gap-2 text-[11px]">
             <label className="space-y-1">thickness {config.phoneFrame.thickness}px<input type="range" min={0} max={30} value={config.phoneFrame.thickness} onChange={(e)=>setConfig({ ...config, phoneFrame: { ...config.phoneFrame, thickness: Number(e.target.value) } })} className="w-full" /></label>
             <label className="space-y-1">radius {config.phoneFrame.radius}px<input type="range" min={0} max={80} value={config.phoneFrame.radius} onChange={(e)=>setConfig({ ...config, phoneFrame: { ...config.phoneFrame, radius: Number(e.target.value) } })} className="w-full" /></label>
@@ -502,7 +502,7 @@ export default function Admin() {
         <ButtonDefaultsEditor defaults={config.buttonDefaults} onChange={(d)=>setConfig({ ...config, buttonDefaults: d })} />
 
         <div className="p-3 rounded-2xl bg-white border shadow-sm space-y-2">
-          <p className="font-semibold text-sm">🔗 Links & Pembatas</p>
+          <p className="font-semibold text-sm">Tombol & Pembatas</p>
           <div className="flex gap-2">
             <button onClick={()=>setConfig({ ...config, links: [...config.links, { id: `link-${Date.now()}`, title: "Link baru", url: "https://", bgColor: "rgba(255,255,255,0.85)", textColor: "#111827", width: 100, fontSize: 15, height: "lg", radius: 20, custom: false, shapeType: "pill", tornAmount: 22, bold: true, alpha: 85, blur: 0, backdrop: 12, saturate: 150, brightness: 105, refraction: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.8)", borderGradientFrom: "#ffffff", borderGradientTo: "#ffffff", borderRotation: 135 } as LinkItem] })} className="px-3 py-1.5 rounded-full bg-black text-white text-[11px]">+ Link</button>
             <button onClick={()=>setConfig({ ...config, links: [...config.links, { id: `div-${Date.now()}`, type: "divider", divider: { enabled: true, text: "•", lineColor: "#ffffff", pillColor: "#ffffff", textColor: "#6b7280", height: 1.8, showDot: true } } as DividerBlock] })} className="px-3 py-1.5 rounded-full bg-white border text-[11px]">+ Pembatas</button>
