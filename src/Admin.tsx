@@ -62,7 +62,7 @@ function MiniIconBtn({ children, label, onClick }: { children: React.ReactNode; 
 function LogoEditor({ config, onChange }: { config: MicrositeConfig; onChange: (c: MicrositeConfig) => void }) {
   return (
     <div className="p-3 rounded-2xl bg-white border shadow-sm space-y-3">
-      <p className="font-semibold text-sm">Logo</p>
+      <p className="font-semibold text-sm">🖼️ Logo & Judul + Animasi</p>
       <input value={config.logoUrl} onChange={(e) => onChange({ ...config, logoUrl: e.target.value })} placeholder="https://.../logo.png atau .mp4/.webm" className="w-full p-2.5 rounded-xl border bg-white text-xs font-mono" />
       <div className="flex gap-1 flex-wrap">
         {(["circle", "square", "rounded", "hexagon", "blob", "jelly"] as const).map((s) => (
@@ -70,7 +70,7 @@ function LogoEditor({ config, onChange }: { config: MicrositeConfig; onChange: (
         ))}
       </div>
       <div className="space-y-2 pt-2 border-t">
-        <p className="text-[11px] font-bold opacity-70">Animasi Logo</p>
+        <p className="text-[11px] font-bold opacity-70">✨ Animasi Logo</p>
         <div className="flex gap-1 flex-wrap">
           {(["none", "float", "pulse", "spin", "bounce", "jelly", "wiggle", "glow"] as const).map((anim) => (
             <button key={anim} onClick={() => onChange({ ...config, logoAnimation: anim })} className={`px-2.5 py-1 rounded-full border text-[11px] ${config.logoAnimation === anim ? "bg-black text-white" : "bg-white"}`}>{anim}</button>
@@ -106,16 +106,13 @@ function LogoEditor({ config, onChange }: { config: MicrositeConfig; onChange: (
   );
 }
 function BgGlassEditor({ label, bg, onChange }: { label: string; bg: BgConfig; onChange: (b: BgConfig) => void }) {
-  const [pasting, setPasting] = useState(bg.type === "image" || bg.type === "video" ? bg.value : "");
   const [gradFrom, setGradFrom] = useState(bg.gradientFrom || "#a8edea");
   const [gradTo, setGradTo] = useState(bg.gradientTo || "#fed6e3");
-  useEffect(() => { if (bg.type === "image" || bg.type === "video") setPasting(bg.value); }, [bg.value, bg.type]);
   useEffect(() => { setGradFrom(bg.gradientFrom || "#a8edea"); setGradTo(bg.gradientTo || "#fed6e3"); }, [bg.gradientFrom, bg.gradientTo]);
-  const handlePaste = () => { if (!pasting.trim()) return; const isVid = isVideoUrl(pasting.trim()); onChange({ ...bg, type: isVid ? "video" : "image", value: pasting.trim() }); };
   const handleGradChange = (from: string, to: string) => { setGradFrom(from); setGradTo(to); onChange({ ...bg, type: "gradient", gradientFrom: from, gradientTo: to, value: `linear-gradient(135deg, ${from}, ${to})` }); };
   return (
     <div className="space-y-3 p-3 rounded-2xl bg-white border shadow-sm">
-      <p className="font-semibold text-sm">{label}</p>
+      <p className="font-semibold text-sm">{label} — 6 slider glass</p>
       <div className="flex gap-1 flex-wrap">
         {(["color", "gradient", "image", "video", "transparent"] as const).map((t) => (
           <button key={t} onClick={() => onChange({ ...bg, type: t })} className={`px-3 py-1 rounded-full border text-xs ${bg.type === t ? "bg-black text-white" : "bg-white"}`}>{t}</button>
@@ -123,7 +120,34 @@ function BgGlassEditor({ label, bg, onChange }: { label: string; bg: BgConfig; o
       </div>
       {bg.type === "color" && <div className="flex gap-2 items-center"><input type="color" value={bg.value.startsWith("#") ? bg.value : "#ffffff"} onChange={(e) => onChange({ ...bg, value: e.target.value })} className="w-10 h-10 rounded-lg border" /><span className="text-xs opacity-60">Warna dasar</span></div>}
       {bg.type === "gradient" && <div className="flex gap-3"><label className="flex-1 text-[11px]">Warna 1<input type="color" value={gradFrom} onChange={(e) => handleGradChange(e.target.value, gradTo)} className="w-full h-9 rounded-lg border" /></label><label className="flex-1 text-[11px]">Warna 2<input type="color" value={gradTo} onChange={(e) => handleGradChange(gradFrom, e.target.value)} className="w-full h-9 rounded-lg border" /></label></div>}
-      {(bg.type === "image" || bg.type === "video") && (<div className="space-y-2"><div className="flex gap-2"><input value={pasting} onChange={(e) => setPasting(e.target.value)} placeholder={bg.type === "video" ? "https://.../video.mp4" : "https://.../gambar.jpg"} className="flex-1 p-2.5 rounded-xl border bg-white text-sm font-mono" /><button onClick={handlePaste} className="px-3 py-2 rounded-xl bg-black text-white text-xs font-bold">Pakai</button></div></div>)}
+      {(bg.type === "image" || bg.type === "video") && (
+        <div className="space-y-2">
+          <input
+            value={bg.value}
+            onChange={(e) => {
+              const v = e.target.value;
+              // auto-save langsung tanpa tombol Pakai
+              if (!v.trim()) { onChange({ ...bg, value: "" }); return; }
+              const isVid = isVideoUrl(v.trim());
+              // jika link video, otomatis jadi video, jika gambar jadi image
+              onChange({ ...bg, type: isVid ? "video" : "image", value: v.trim() });
+            }}
+            onPaste={(e) => {
+              // paste langsung save juga
+              const pasted = e.clipboardData.getData('text');
+              if (pasted) {
+                e.preventDefault();
+                const v = pasted.trim();
+                const isVid = isVideoUrl(v);
+                onChange({ ...bg, type: isVid ? "video" : "image", value: v });
+              }
+            }}
+            placeholder={bg.type === "video" ? "https://.../video.mp4 - paste langsung auto save" : "https://.../gambar.jpg - paste langsung auto save"}
+            className="w-full p-2.5 rounded-xl border bg-white text-sm font-mono"
+          />
+          <p className="text-[10px] opacity-50">✓ Auto-save: tempel link langsung tersimpan, tidak perlu tombol Pakai</p>
+        </div>
+      )}
       <button type="button" onClick={() => onChange({ ...bg, hue: 0, alpha: 100, opacity: 100, blur: 0, backdrop: 0, saturate: 100, brightness: 100, refraction: 0 })} className="text-[11px] px-2.5 py-1 rounded-full bg-black/[0.06] border font-bold w-fit">↺ Reset</button>
       <div className="grid grid-cols-2 gap-2 text-[11px] pt-2 border-t">
         <label className="space-y-1">alpha {bg.alpha}%<input type="range" min={0} max={100} value={bg.alpha} onChange={(e) => onChange({ ...bg, alpha: Number(e.target.value), opacity: Number(e.target.value) })} className="w-full" /></label>
@@ -139,7 +163,7 @@ function BgGlassEditor({ label, bg, onChange }: { label: string; bg: BgConfig; o
 function ButtonDefaultsEditor({ defaults, onChange }: { defaults: ButtonDefaults; onChange: (d: ButtonDefaults) => void }) {
   return (
     <div className="p-3 rounded-2xl bg-white border shadow-sm space-y-3">
-      <p className="font-semibold text-sm">Button Default</p>
+      <p className="font-semibold text-sm">🔘 Button Default</p>
       <div className="grid grid-cols-2 gap-2 text-[11px]">
         <label className="space-y-1">bgColor<input type="color" value={defaults.bgColor.startsWith("#") ? defaults.bgColor : "#ffffff"} onChange={(e) => onChange({ ...defaults, bgColor: e.target.value })} className="w-full h-7 rounded" /></label>
         <label className="space-y-1">textColor<input type="color" value={defaults.textColor} onChange={(e) => onChange({ ...defaults, textColor: e.target.value })} className="w-full h-7 rounded" /></label>
@@ -462,11 +486,11 @@ export default function Admin() {
         </div>
 
         <LogoEditor config={config} onChange={(c)=>setConfig(c)} />
-        <BgGlassEditor label="Latar Luar (Outer)" bg={config.outerBg} onChange={(b)=>setConfig({ ...config, outerBg: b })} />
-        <BgGlassEditor label="Latar Dalam HP (Inner)" bg={config.innerBg} onChange={(b)=>setConfig({ ...config, innerBg: b })} />
+        <BgGlassEditor label="🌈 Latar Luar (Outer)" bg={config.outerBg} onChange={(b)=>setConfig({ ...config, outerBg: b })} />
+        <BgGlassEditor label="📱 Dalam Bingkai HP (Inner)" bg={config.innerBg} onChange={(b)=>setConfig({ ...config, innerBg: b })} />
 
         <div className="p-3 rounded-2xl bg-white border shadow-sm space-y-2">
-          <p className="font-semibold text-sm">Border HP</p>
+          <p className="font-semibold text-sm">📐 Bingkai HP</p>
           <div className="grid grid-cols-2 gap-2 text-[11px]">
             <label className="space-y-1">thickness {config.phoneFrame.thickness}px<input type="range" min={0} max={30} value={config.phoneFrame.thickness} onChange={(e)=>setConfig({ ...config, phoneFrame: { ...config.phoneFrame, thickness: Number(e.target.value) } })} className="w-full" /></label>
             <label className="space-y-1">radius {config.phoneFrame.radius}px<input type="range" min={0} max={80} value={config.phoneFrame.radius} onChange={(e)=>setConfig({ ...config, phoneFrame: { ...config.phoneFrame, radius: Number(e.target.value) } })} className="w-full" /></label>
@@ -478,7 +502,7 @@ export default function Admin() {
         <ButtonDefaultsEditor defaults={config.buttonDefaults} onChange={(d)=>setConfig({ ...config, buttonDefaults: d })} />
 
         <div className="p-3 rounded-2xl bg-white border shadow-sm space-y-2">
-          <p className="font-semibold text-sm">Tombol & Pembatas</p>
+          <p className="font-semibold text-sm">🔗 Links & Pembatas</p>
           <div className="flex gap-2">
             <button onClick={()=>setConfig({ ...config, links: [...config.links, { id: `link-${Date.now()}`, title: "Link baru", url: "https://", bgColor: "rgba(255,255,255,0.85)", textColor: "#111827", width: 100, fontSize: 15, height: "lg", radius: 20, custom: false, shapeType: "pill", tornAmount: 22, bold: true, alpha: 85, blur: 0, backdrop: 12, saturate: 150, brightness: 105, refraction: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.8)", borderGradientFrom: "#ffffff", borderGradientTo: "#ffffff", borderRotation: 135 } as LinkItem] })} className="px-3 py-1.5 rounded-full bg-black text-white text-[11px]">+ Link</button>
             <button onClick={()=>setConfig({ ...config, links: [...config.links, { id: `div-${Date.now()}`, type: "divider", divider: { enabled: true, text: "•", lineColor: "#ffffff", pillColor: "#ffffff", textColor: "#6b7280", height: 1.8, showDot: true } } as DividerBlock] })} className="px-3 py-1.5 rounded-full bg-white border text-[11px]">+ Pembatas</button>
