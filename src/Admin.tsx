@@ -223,6 +223,7 @@ export default function Admin() {
   const logoAnimStyle = `@keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}} @keyframes logoPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}} @keyframes logoSpin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}} @keyframes logoBounce{0%,100%{transform:translateY(0)}} @keyframes logoJelly{0%{transform:scale3d(1,1,1)}30%{transform:scale3d(1.15,0.85,1)}40%{transform:scale3d(0.9,1.1,1)}50%{transform:scale3d(1.05,0.95,1)}} @keyframes logoWiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(-6deg)}75%{transform:rotate(6deg)}} .logo-anim-float{animation:logoFloat 3s ease-in-out infinite} .logo-anim-pulse{animation:logoPulse 2s ease-in-out infinite} .logo-anim-spin{animation:logoSpin 6s linear infinite} .logo-anim-bounce{animation:logoBounce 2s ease infinite} .logo-anim-jelly{animation:logoJelly 1.2s ease infinite} .logo-anim-wiggle{animation:logoWiggle 1.5s ease-in-out infinite}`;
 
   useEffect(() => {
+    isFirstLoadRef.current = true;
     (async () => {
       try {
         const col = collection(db, "microsites");
@@ -243,24 +244,19 @@ export default function Admin() {
       } catch (e) {
         console.error("Admin fetch error", e);
         setConfig({ ...DEFAULT_CONFIG, slug: paramSlug || "main" } as MicrositeConfig);
+      } finally {
+        // beri jeda 1 detik sebelum autosave aktif, agar fetch awal tidak ke-trigger save
+        setTimeout(() => { isFirstLoadRef.current = false; }, 1000);
       }
     })();
   }, [paramSlug]);
 
-  // FIX: sinkronkan slug state ketika paramSlug berubah via navigasi (klik pill)
+  // sinkronkan slug input dengan paramSlug dari URL
   useEffect(() => {
     if (paramSlug) setSlug(paramSlug);
   }, [paramSlug]);
 
-  // tandai first load selesai setelah config awal ke-load
-  useEffect(() => {
-    if (config) {
-      const t = setTimeout(() => { isFirstLoadRef.current = false; }, 800);
-      return () => clearTimeout(t);
-    }
-  }, [config.slug]);
-
-  // AUTO-SAVE: simpan otomatis 1.2 detik setelah config/slug berubah
+  // AUTO-SAVE
   useEffect(() => {
     if (isFirstLoadRef.current) return;
     if (!autoSave) return;
@@ -287,8 +283,8 @@ export default function Admin() {
         };
         await setDoc(doc(db, "microsites", target), safeConfig as any);
         setLastSaved(new Date());
-        // update daftar slug tanpa refresh full
         setAllSlugs(prev => prev.includes(target) ? prev : [...prev, target]);
+        console.log("Auto-saved:", target);
       } catch (e) {
         console.error("Auto-save error", e);
       } finally {
@@ -300,45 +296,55 @@ export default function Admin() {
     };
   }, [config, slug, autoSave]);
 
-  const handlePublishAndView = async (targetSlug?: string) => {
+  const saveNow = async (targetSlug?: string) => {
     const rawTarget = targetSlug || slug;
     const target = rawTarget.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/--+/g, '-').replace(/^-|-$/g, '').trim() || "main";
-    if (!target) {
-      alert("Slug tidak valid");
-      return;
-    }
+    const safeConfig = {
+      ...config,
+      slug: target,
+      logoUrl: sanitizeUrl(config.logoUrl || ""),
+      outerBg: { ...config.outerBg, value: sanitizeUrl(config.outerBg.value || "") },
+      innerBg: { ...config.innerBg, value: sanitizeUrl(config.innerBg.value || "") },
+      links: config.links.map((b) => {
+        if ((b as any).type === "divider") return b;
+        const l = b as any;
+        return { ...l, url: sanitizeUrl(l.url || "") };
+      }),
+      updatedAt: Date.now(),
+    };
+    await setDoc(doc(db, "microsites", target), safeConfig as any);
+    const col = collection(db, "microsites");
+    const snap = await getDocs(col);
+    setAllSlugs(snap.docs.map((d) => d.id));
+    setLastSaved(new Date());
+    return target;
+  };
+
+  const handlePublishAndView = async (targetSlug?: string) => {
+    const target = targetSlug ? targetSlug.toLowerCase().replace(/[^a-z0-9-]/g,'-') : slug.toLowerCase().replace(/[^a-z0-9-]/g,'-');
     const targetUrl = `/${target === "main" ? "" : target}`;
-    // Buka blank dulu untuk hindari popup blocker, tapi tetap kasih feedback error
     const win = window.open("about:blank", "_blank");
     try {
-      // sanitasi URL agar tidak mixed content http:// -> https://
-      const safeConfig = {
-        ...config,
-        slug: target,
-        logoUrl: sanitizeUrl(config.logoUrl || ""),
-        outerBg: { ...config.outerBg, value: sanitizeUrl(config.outerBg.value || "") },
-        innerBg: { ...config.innerBg, value: sanitizeUrl(config.innerBg.value || "") },
-        links: config.links.map((b) => {
-          if ((b as any).type === "divider") return b;
-          const l = b as any;
-          return { ...l, url: sanitizeUrl(l.url || "") };
-        }),
-        updatedAt: Date.now(),
-      };
-      const ref = doc(db, "microsites", target);
-      await setDoc(ref, safeConfig as any);
-      const col = collection(db, "microsites");
-      const snap = await getDocs(col);
-      setAllSlugs(snap.docs.map((d) => d.id));
-      // update config slug agar konsisten
-      setConfig((prev) => ({ ...prev, slug: target } as MicrositeConfig));
-      navigate(`/admin/${target}`);
+      const savedTarget = await saveNow(target);
+      navigate(`/admin/${savedTarget}`);
       if (win) win.location.href = targetUrl;
       else window.open(targetUrl, "_blank");
     } catch (e: any) {
-      console.error("Publish error", e);
       if (win) win.close();
+      console.error(e);
       alert(`Gagal menyimpan: ${e?.message || e}`);
+    }
+  };
+
+  const handleManualSave = async () => {
+    try {
+      setIsSaving(true);
+      await saveNow();
+      alert("Tersimpan!");
+    } catch (e: any) {
+      alert(`Gagal: ${e?.message}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -550,6 +556,7 @@ export default function Admin() {
           <div className="flex items-center gap-1.5 p-2 rounded-xl bg-black/[0.04] border">
             <input value={slug} onChange={(e)=>setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g,'-'))} placeholder="nama-slug" className="flex-1 min-w-0 p-2 rounded-lg border bg-white text-sm font-mono" />
             <div className="flex gap-1">
+              <IconBtn label="Simpan" onClick={()=>handleManualSave()}>💾</IconBtn>
               <IconBtn label="View" onClick={()=>handlePublishAndView()}>👁️</IconBtn>
               <IconBtn label="Export" onClick={()=>handleExportCurrent()}>⬇️</IconBtn>
               <IconBtn label="Duplikat" onClick={()=>handleDuplicate(slug)}>📋</IconBtn>
@@ -572,9 +579,9 @@ export default function Admin() {
           </div>
           <div className="flex items-center justify-between">
             <p className="text-[10px] opacity-50">{allSlugs.length}/10 slug • klik untuk edit</p>
-            <label className="flex items-center gap-1.5 text-[10px] cursor-pointer">
+            <label className="flex items-center gap-1.5 text-[10px] cursor-pointer select-none">
               <input type="checkbox" checked={autoSave} onChange={(e)=>setAutoSave(e.target.checked)} className="w-3 h-3" />
-              Auto-save
+              Auto-save {autoSave ? "ON" : "OFF"}
             </label>
           </div>
         </div>
