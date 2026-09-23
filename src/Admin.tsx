@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, deleteDoc } from "firebase/firestore";
-import { DEFAULT_CONFIG, getBgLayerStyle, isVideoUrl } from "./App";
+import { DEFAULT_CONFIG, getBgLayerStyle, isVideoUrl, sanitizeUrl } from "./App";
 import type { MicrositeConfig, LinkItem, BgConfig, ContentBlock, DividerBlock, ButtonDefaults } from "./App";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, KeyboardSensor } from "@dnd-kit/core";
 import { arrayMove, SortableContext, verticalListSortingStrategy, useSortable, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
@@ -16,7 +16,7 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
-const fbApp = initializeApp(firebaseConfig);
+const fbApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
 
 function getLogoStyle(shape: MicrositeConfig["logoShape"], radius: number): React.CSSProperties {
@@ -211,7 +211,12 @@ export default function Admin() {
   const [allSlugs, setAllSlugs] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleteInput, setDeleteInput] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [autoSave, setAutoSave] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const saveTimeoutRef = useRef<any>(null);
+  const isFirstLoadRef = useRef(true);
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const outerStyle = getBgLayerStyle(config.outerBg);
   const innerStyle = getBgLayerStyle(config.innerBg);
@@ -242,22 +247,98 @@ export default function Admin() {
     })();
   }, [paramSlug]);
 
+  // FIX: sinkronkan slug state ketika paramSlug berubah via navigasi (klik pill)
+  useEffect(() => {
+    if (paramSlug) setSlug(paramSlug);
+  }, [paramSlug]);
+
+  // tandai first load selesai setelah config awal ke-load
+  useEffect(() => {
+    if (config) {
+      const t = setTimeout(() => { isFirstLoadRef.current = false; }, 800);
+      return () => clearTimeout(t);
+    }
+  }, [config.slug]);
+
+  // AUTO-SAVE: simpan otomatis 1.2 detik setelah config/slug berubah
+  useEffect(() => {
+    if (isFirstLoadRef.current) return;
+    if (!autoSave) return;
+    if (!slug) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(async () => {
+      const rawTarget = slug;
+      const target = rawTarget.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/--+/g, '-').replace(/^-|-$/g, '').trim() || "main";
+      if (!target) return;
+      try {
+        setIsSaving(true);
+        const safeConfig = {
+          ...config,
+          slug: target,
+          logoUrl: sanitizeUrl(config.logoUrl || ""),
+          outerBg: { ...config.outerBg, value: sanitizeUrl(config.outerBg.value || "") },
+          innerBg: { ...config.innerBg, value: sanitizeUrl(config.innerBg.value || "") },
+          links: config.links.map((b) => {
+            if ((b as any).type === "divider") return b;
+            const l = b as any;
+            return { ...l, url: sanitizeUrl(l.url || "") };
+          }),
+          updatedAt: Date.now(),
+        };
+        await setDoc(doc(db, "microsites", target), safeConfig as any);
+        setLastSaved(new Date());
+        // update daftar slug tanpa refresh full
+        setAllSlugs(prev => prev.includes(target) ? prev : [...prev, target]);
+      } catch (e) {
+        console.error("Auto-save error", e);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 1200);
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [config, slug, autoSave]);
+
   const handlePublishAndView = async (targetSlug?: string) => {
-    const target = targetSlug || slug;
+    const rawTarget = targetSlug || slug;
+    const target = rawTarget.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/--+/g, '-').replace(/^-|-$/g, '').trim() || "main";
+    if (!target) {
+      alert("Slug tidak valid");
+      return;
+    }
     const targetUrl = `/${target === "main" ? "" : target}`;
+    // Buka blank dulu untuk hindari popup blocker, tapi tetap kasih feedback error
     const win = window.open("about:blank", "_blank");
     try {
+      // sanitasi URL agar tidak mixed content http:// -> https://
+      const safeConfig = {
+        ...config,
+        slug: target,
+        logoUrl: sanitizeUrl(config.logoUrl || ""),
+        outerBg: { ...config.outerBg, value: sanitizeUrl(config.outerBg.value || "") },
+        innerBg: { ...config.innerBg, value: sanitizeUrl(config.innerBg.value || "") },
+        links: config.links.map((b) => {
+          if ((b as any).type === "divider") return b;
+          const l = b as any;
+          return { ...l, url: sanitizeUrl(l.url || "") };
+        }),
+        updatedAt: Date.now(),
+      };
       const ref = doc(db, "microsites", target);
-      await setDoc(ref, { ...config, slug: target, updatedAt: Date.now() });
+      await setDoc(ref, safeConfig as any);
       const col = collection(db, "microsites");
       const snap = await getDocs(col);
       setAllSlugs(snap.docs.map((d) => d.id));
+      // update config slug agar konsisten
+      setConfig((prev) => ({ ...prev, slug: target } as MicrositeConfig));
       navigate(`/admin/${target}`);
       if (win) win.location.href = targetUrl;
       else window.open(targetUrl, "_blank");
-    } catch (e) {
+    } catch (e: any) {
+      console.error("Publish error", e);
       if (win) win.close();
-      console.error(e);
+      alert(`Gagal menyimpan: ${e?.message || e}`);
     }
   };
 
@@ -446,7 +527,14 @@ export default function Admin() {
       <div className="w-[420px] max-h-screen overflow-y-auto p-4 space-y-4 border-r bg-[#fdf2f8]">
         <div className="p-3 rounded-2xl bg-white border shadow-sm space-y-3">
           <div className="flex items-center justify-between">
-            <p className="font-semibold text-sm">Slug Manager</p>
+            <div className="flex items-center gap-2">
+              <p className="font-semibold text-sm">Slug Manager</p>
+              {isSaving ? (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 border animate-pulse">Menyimpan...</span>
+              ) : lastSaved ? (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 border">Tersimpan {lastSaved.toLocaleTimeString()}</span>
+              ) : null}
+            </div>
             <div className="flex gap-1.5">
               <div className="relative group/btn">
                 <button onClick={handleExportAll} className="px-3 py-1 rounded-full bg-black text-white text-[11px] font-bold">export all</button>
@@ -482,7 +570,13 @@ export default function Admin() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] opacity-50">{allSlugs.length}/10 slug • klik untuk edit</p>
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] opacity-50">{allSlugs.length}/10 slug • klik untuk edit</p>
+            <label className="flex items-center gap-1.5 text-[10px] cursor-pointer">
+              <input type="checkbox" checked={autoSave} onChange={(e)=>setAutoSave(e.target.checked)} className="w-3 h-3" />
+              Auto-save
+            </label>
+          </div>
         </div>
 
         <LogoEditor config={config} onChange={(c)=>setConfig(c)} />
@@ -504,10 +598,10 @@ export default function Admin() {
         <div className="p-3 rounded-2xl bg-white border shadow-sm space-y-2">
           <p className="font-semibold text-sm">Tombol & Pembatas</p>
           <div className="flex gap-2">
-            <button onClick={()=>setConfig({ ...config, links: [...config.links, { id: `link-${Date.now()}`, title: "Link baru", url: "https://", bgColor: "rgba(255,255,255,0.85)", textColor: "#111827", width: 100, fontSize: 15, height: "lg", radius: 20, custom: false, shapeType: "pill", tornAmount: 22, bold: true, alpha: 85, blur: 0, backdrop: 12, saturate: 150, brightness: 105, refraction: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.8)", borderGradientFrom: "#ffffff", borderGradientTo: "#ffffff", borderRotation: 135 } as LinkItem] })} className="px-3 py-1.5 rounded-full bg-black text-white text-[11px]">+ Link</button>
-            <button onClick={()=>setConfig({ ...config, links: [...config.links, { id: `div-${Date.now()}`, type: "divider", divider: { enabled: true, text: "•", lineColor: "#ffffff", pillColor: "#ffffff", textColor: "#6b7280", height: 1.8, showDot: true } } as DividerBlock] })} className="px-3 py-1.5 rounded-full bg-white border text-[11px]">+ Pembatas</button>
+            <button onClick={()=>setConfig(prev => ({ ...prev, links: [...prev.links, { id: `link-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, title: "Link baru", url: "https://", bgColor: "rgba(255,255,255,0.85)", textColor: "#111827", width: 100, fontSize: 15, height: "lg", radius: 20, custom: false, shapeType: "pill", tornAmount: 22, bold: true, alpha: 85, blur: 0, backdrop: 12, saturate: 150, brightness: 105, refraction: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.8)", borderGradientFrom: "#ffffff", borderGradientTo: "#ffffff", borderRotation: 135 } as LinkItem] }))} className="px-3 py-1.5 rounded-full bg-black text-white text-[11px]">+ Link</button>
+            <button onClick={()=>setConfig(prev => ({ ...prev, links: [...prev.links, { id: `div-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, type: "divider", divider: { enabled: true, text: "•", lineColor: "#ffffff", pillColor: "#ffffff", textColor: "#6b7280", height: 1.8, showDot: true } } as DividerBlock] }))} className="px-3 py-1.5 rounded-full bg-white border text-[11px]">+ Pembatas</button>
           </div>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event)=>{ const { active, over } = event; if (over && active.id!==over.id){ const oldIndex=config.links.findIndex(b=>b.id===active.id); const newIndex=config.links.findIndex(b=>b.id===over.id); setConfig({ ...config, links: arrayMove(config.links, oldIndex, newIndex) }); } }}>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(event)=>{ const { active, over } = event; if (over && active.id!==over.id){ setConfig(prev => { const oldIndex=prev.links.findIndex(b=>b.id===active.id); const newIndex=prev.links.findIndex(b=>b.id===over.id); return { ...prev, links: arrayMove(prev.links, oldIndex, newIndex) }; }); } }}>
             <SortableContext items={config.links.map(b=>b.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-2">
                 {config.links.map((block)=>{
@@ -522,13 +616,13 @@ export default function Admin() {
       </div>
 
       <div className="flex-1 min-h-[100vh] flex items-center justify-center p-6 relative overflow-hidden bg-transparent">
-        {(config.outerBg.type === "video" || isVideoUrl(config.outerBg.value)) ? <video src={config.outerBg.value} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={outerStyle} /> : <div className="absolute inset-0 pointer-events-none" style={outerStyle} />}
+        {(config.outerBg.type === "video" || isVideoUrl(config.outerBg.value)) ? <video src={sanitizeUrl(config.outerBg.value)} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={outerStyle} /> : <div className="absolute inset-0 pointer-events-none" style={outerStyle} />}
         <div className="relative w-[390px] max-w-full h-[760px] overflow-hidden flex flex-col shadow-2xl" style={{ border: `${config.phoneFrame.thickness}px solid ${config.phoneFrame.color}`, borderRadius: `${config.phoneFrame.radius}px`, boxShadow: `0 ${config.phoneFrame.shadow}px ${config.phoneFrame.shadow * 2}px rgba(0,0,0,0.18)`, background: "transparent" }}>
-          {(config.innerBg.type === "video" || isVideoUrl(config.innerBg.value)) ? <video src={config.innerBg.value} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ ...innerStyle, borderRadius: `${Math.max(0, config.phoneFrame.radius - config.phoneFrame.thickness)}px` }} /> : <div className="absolute inset-0 pointer-events-none" style={{ ...innerStyle, borderRadius: `${Math.max(0, config.phoneFrame.radius - config.phoneFrame.thickness)}px` }} />}
+          {(config.innerBg.type === "video" || isVideoUrl(config.innerBg.value)) ? <video src={sanitizeUrl(config.innerBg.value)} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ ...innerStyle, borderRadius: `${Math.max(0, config.phoneFrame.radius - config.phoneFrame.thickness)}px` }} /> : <div className="absolute inset-0 pointer-events-none" style={{ ...innerStyle, borderRadius: `${Math.max(0, config.phoneFrame.radius - config.phoneFrame.thickness)}px` }} />}
           <div className="flex-1 overflow-y-auto scrollbar-none relative z-10" style={{ borderRadius: `${Math.max(0, config.phoneFrame.radius - config.phoneFrame.thickness)}px` }}>
             <div className="relative z-10 px-6 pt-10 pb-6 flex flex-col items-center">
               <div className={`overflow-hidden bg-white shadow-lg ${config.logoAnimation !== "none" ? (config.logoAnimationOnHover ? `logo-anim-on-hover` : `logo-anim-${config.logoAnimation}`) : ""}`} style={{ width: config.logoSize, height: config.logoSize, ...getLogoStyle(config.logoShape, config.logoRadius), border: `${config.logoBorderWidth}px solid ${config.logoBorderColor}`, animationDuration: `${config.logoAnimationSpeed}s` } as React.CSSProperties}>
-                {isVideoUrl(config.logoUrl) ? <video src={config.logoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" style={{ transform: `translate(${config.logoOffsetX}%, ${config.logoOffsetY}%) scale(${config.logoZoom / 100})` }} /> : <img src={config.logoUrl} className="w-full h-full object-cover" alt="logo" style={{ transform: `translate(${config.logoOffsetX}%, ${config.logoOffsetY}%) scale(${config.logoZoom / 100})` }} />}
+                {isVideoUrl(config.logoUrl) ? <video src={sanitizeUrl(config.logoUrl)} autoPlay loop muted playsInline className="w-full h-full object-cover" style={{ transform: `translate(${config.logoOffsetX}%, ${config.logoOffsetY}%) scale(${config.logoZoom / 100})` }} /> : <img src={config.logoUrl} className="w-full h-full object-cover" alt="logo" style={{ transform: `translate(${config.logoOffsetX}%, ${config.logoOffsetY}%) scale(${config.logoZoom / 100})` }} />}
               </div>
               <h2 className="mt-4 font-bold text-center" style={{ color: config.titleColor, fontSize: config.titleSize }}>{config.title}</h2>
               <div className="w-full mt-6 flex flex-col items-center" style={{ gap: config.gap }}>

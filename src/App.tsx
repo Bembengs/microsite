@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { BrowserRouter, Routes, Route, useParams } from "react-router-dom";
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -11,7 +11,7 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
-const fbApp = initializeApp(firebaseConfig);
+const fbApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
 
 export type BgConfig = {
@@ -144,9 +144,17 @@ function getTornClipPath(amount: number): string {
   return `polygon(${jitter}% ${jitter}%, ${22 + jitter}% ${0}%, ${38 - jitter}% ${jitter * 1.2}%, ${58 + jitter * 0.5}% ${0}%, ${78 - jitter}% ${jitter}%, 100% ${2 + jitter}%, 100% ${78 - jitter}%, ${82 + jitter}% ${100 - jitter}%, ${58 - jitter}% ${100}%, ${36 + jitter}% ${98 - jitter}%, ${18 - jitter}% ${100}%, 0% ${88 - jitter}%)`;
 }
 
+export function sanitizeUrl(url: string): string {
+  if (!url) return url;
+  const t = url.trim();
+  if (t.startsWith("http://")) return t.replace("http://", "https://");
+  return t;
+}
+
 export function isVideoUrl(url: string): boolean {
   if (!url) return false;
-  const u = url.split("?")[0].toLowerCase();
+  const sanitized = sanitizeUrl(url);
+  const u = sanitized.split("?")[0].toLowerCase();
   return u.endsWith(".mp4") || u.endsWith(".webm") || u.endsWith(".mov") || u.endsWith(".m4v") || u.endsWith(".ogg");
 }
 
@@ -164,7 +172,8 @@ export function getBgLayerStyle(bg: BgConfig): React.CSSProperties {
   const backdropFilter = `blur(${bg.backdrop}px) saturate(${bg.saturate}%) brightness(${bg.brightness}%) contrast(${100 + bg.refraction * 2}%)`;
   const filterSelf = `blur(${bg.blur}px) hue-rotate(${bg.hue}deg) saturate(${bg.saturate}%) brightness(${bg.brightness}%)`;
   if (bg.type === "image") {
-    return { backgroundImage: `url(${bg.value})`, backgroundSize: "cover", backgroundPosition: "center", backdropFilter, WebkitBackdropFilter: backdropFilter, filter: filterSelf, opacity: alpha / 100 } as React.CSSProperties;
+    const safeVal = sanitizeUrl(bg.value);
+    return { backgroundImage: `url(${safeVal})`, backgroundSize: "cover", backgroundPosition: "center", backdropFilter, WebkitBackdropFilter: backdropFilter, filter: filterSelf, opacity: alpha / 100 } as React.CSSProperties;
   }
   if (bg.type === "video") {
     return { backdropFilter, WebkitBackdropFilter: backdropFilter, filter: filterSelf, opacity: alpha / 100 } as React.CSSProperties;
@@ -257,14 +266,14 @@ function MicrositeView({ config }: { config: MicrositeConfig }) {
   return (
     <div className="min-h-screen w-full flex items-center justify-center p-4 md:p-8 relative overflow-hidden bg-transparent">
       <JellyGlobalStyle />
-      {isVideoBg(config.outerBg) ? <video src={config.outerBg.value} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={outerStyle} /> : <div className="absolute inset-0 pointer-events-none" style={outerStyle} />}
+      {isVideoBg(config.outerBg) ? <video src={sanitizeUrl(config.outerBg.value)} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={outerStyle} /> : <div className="absolute inset-0 pointer-events-none" style={outerStyle} />}
       <div className="relative w-full max-w-[390px] max-h-[820px] h-[78vh] md:h-[800px] overflow-hidden flex flex-col" style={{ border: `${config.phoneFrame.thickness}px solid ${config.phoneFrame.color}`, borderRadius: `${config.phoneFrame.radius}px`, boxShadow: `0 ${config.phoneFrame.shadow}px ${config.phoneFrame.shadow * 2}px rgba(0,0,0,0.18)`, background: "transparent" }}>
-        {isVideoBg(config.innerBg) ? <video src={config.innerBg.value} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ ...innerStyle, borderRadius: `${Math.max(0, config.phoneFrame.radius - config.phoneFrame.thickness)}px` }} /> : <div className="absolute inset-0 pointer-events-none" style={{ ...innerStyle, borderRadius: `${Math.max(0, config.phoneFrame.radius - config.phoneFrame.thickness)}px` }} />}
+        {isVideoBg(config.innerBg) ? <video src={sanitizeUrl(config.innerBg.value)} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none" style={{ ...innerStyle, borderRadius: `${Math.max(0, config.phoneFrame.radius - config.phoneFrame.thickness)}px` }} /> : <div className="absolute inset-0 pointer-events-none" style={{ ...innerStyle, borderRadius: `${Math.max(0, config.phoneFrame.radius - config.phoneFrame.thickness)}px` }} />}
         <div ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-none relative z-10" style={{ borderRadius: `${Math.max(0, config.phoneFrame.radius - config.phoneFrame.thickness)}px` }}>
                     <div className="relative z-10 px-6 pt-12 pb-10 flex flex-col items-center">
             <div className="relative logo-wrapper" style={{ width: config.logoSize, height: config.logoSize, ...(config.logoAnimation !== "none" ? ({ ["--logo-speed" as any]: `${config.logoAnimationSpeed}s`, ["--logo-anim-name" as any]: `logo${config.logoAnimation.charAt(0).toUpperCase() + config.logoAnimation.slice(1)}` } as React.CSSProperties) : {}) }} >
               <div className={`w-full h-full overflow-hidden bg-white ${config.logoAnimation !== "none" ? (config.logoAnimationOnHover ? `logo-anim-on-hover` : `logo-anim-${config.logoAnimation}`) : ""}`} style={{ ...getLogoStyle(config.logoShape, config.logoRadius), border: `${config.logoBorderWidth}px solid ${config.logoBorderColor}`, animationDuration: `${config.logoAnimationSpeed}s` } as React.CSSProperties}>
-                {isVideoUrl(config.logoUrl) ? <video src={config.logoUrl} autoPlay loop muted playsInline className="w-full h-full object-cover" style={{ transform: `translate(${config.logoOffsetX}%, ${config.logoOffsetY}%) scale(${config.logoZoom / 100})` }} /> : <img src={config.logoUrl} alt="logo" className="w-full h-full object-cover" style={{ transform: `translate(${config.logoOffsetX}%, ${config.logoOffsetY}%) scale(${config.logoZoom / 100})` }} />}
+                {isVideoUrl(config.logoUrl) ? <video src={sanitizeUrl(config.logoUrl)} autoPlay loop muted playsInline className="w-full h-full object-cover" style={{ transform: `translate(${config.logoOffsetX}%, ${config.logoOffsetY}%) scale(${config.logoZoom / 100})` }} /> : <img src={sanitizeUrl(config.logoUrl)} alt="logo" className="w-full h-full object-cover" style={{ transform: `translate(${config.logoOffsetX}%, ${config.logoOffsetY}%) scale(${config.logoZoom / 100})` }} />}
               </div>
             </div>
             <h1 className="mt-5 font-bold text-center leading-tight" style={{ color: config.titleColor, fontSize: config.titleSize }}>{config.title}</h1>
